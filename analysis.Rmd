@@ -7,9 +7,11 @@ output: pdf_document
 
 ##Executive Summary
 
-MotorTrend magazine data from observations of 32 models of cars were analyzed to help understand the characteristics that account for fuel efficiency. Of particular interest is whether there is an effect associated with automatic versus manual transmission. After we account for the effect of a strong relationship between vehicle weight and transmission type, we can say that there is a statistically significant increase in gas mileage associated with manual transmissions, which we report as a mean increase of **11.55 mpg**, with a **P-value of 0.00784**.
+MotorTrend magazine data from observations of 32 models of cars were analyzed to help understand the characteristics that account for fuel efficiency. Of particular interest is whether there is an effect associated with automatic versus manual transmission. After we account for the effect of a strong relationship between vehicle weight and transmission type, we can say that there is a statistically significant increase in gas mileage associated with manual transmissions, which we report as a mean increase of **9.23 mpg**, with a maximum **P-value of 0.00378**.
 
 ###Data Processing and Initial Exploratory Analyses
+This report omits some code for brevity. The entire R markdown file can be found [here](https://github.com/amaglamatedclyde/mtcars).
+
 Here we show the first several rows of the dataset.
 
 ```{r, include=F}
@@ -24,7 +26,7 @@ attach(mtcars)
 head(mtcars, 3)
 ```
 
-In the Appendix we present a table explaining the meaning of variable names. Several binary and discrete variables were transformed from numeric vectors to factor variables for this analysis. This set is (cyl, am, vs, gear, carb).
+In the Appendix we present a table explaining the meaning of variable names. Several binary and discrete variables were transformed from numeric vectors to factor variables for this analysis.
 
 ```{r, include=FALSE}
 mtcars$am <- as.factor(mtcars$am)
@@ -50,7 +52,7 @@ diff.means <- round(mean(am1$mpg)-mean(am0$mpg), 2)
 We report a p-value for a t-test with unequal variances as 0.001374 and therefor reject the null hypothesis at the 95% confidence level, to conclude that the difference between the means, `r diff.means` mpg, is significant. 
 
 ###Developing a Multivariate Linear Model
-Next we turn to multivariate regression to develop a model that will help us understand whether confounding variables are contributing **[omitted variable bias](https://en.wikipedia.org/wiki/Omitted-variable_bias)**. We tabulate the correlation of the numeric variables, as many of them measure closely-related properties. In the Appendix we provide a visualization of the relationships between transmission type and the other factor variables.
+Next we turn to multivariate regression to develop a model that will help us understand whether confounding variables are contributing **[omitted variable bias](https://en.wikipedia.org/wiki/Omitted-variable_bias)**. We tabulate the correlation of the numeric variables, as many of them measure closely-related properties. 
 
 <div align="center">**Correlation Table of mtcars Data**</div>
 ```{r, echo=FALSE, fig.align="top", fig.height=2}
@@ -63,15 +65,17 @@ We also know that 'drat,' the rear axle ratio, is a downstream variable determin
 
 From the correlation table we select weight as our first predictor, since it is the variable most highly correlated with mpg. 
 
-Looking at the data sorted by weight below, we see that 9 of the top 10 heaviest cars have automatic transmissions, while 9 of lightest 10 have manual. This leads us to believe we may need to add an interaction term between weight and transmission type to the model. In the Appendix we show a visualization of this relationship.
+Looking at the data sorted by weight below, we see that 9 of the top 10 heaviest cars have automatic transmissions, while 9 of lightest 10 have manual. This leads us to the addition of an interaction term between weight and transmission type to the model. In the Appendix we show a visualization of this relationship.
+
+<div align="center">**Sorting the Data by Vehicle Weight**</div>
 ```{r Sorting By Weight, echo=F}
-kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, cyl, hp) %>% arrange(-wt) %>% head(10))
-kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, cyl, hp) %>% arrange(-wt) %>% tail(10))
+kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, hp, mpg) %>% arrange(-wt) %>% head(10))
+kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, hp, mpg) %>% arrange(-wt) %>% tail(10))
 ```
 
-We systematically examine the inclusion of other variables while seeking to maintain significant P-values for their coefficients and maximize the fit as measured by R-squared. We show the top 2 performing models and choose to include horsepower, which will therefor serve as a proxy for the remaining covariant engine performance variables.
+We systematically examine the inclusion of other variables while seeking to maintain significant P-values for their coefficients and maximize the fit as measured by R-squared. We choose to include horsepower, which will therefor serve as a proxy for the remaining collinear engine performance variables and refer the reader to the full R markdown file for the code.
 
-```{r, echo=F, message=F}
+```{r, echo=F, message=F, include=F}
 model2 <- lm(mpg~wt+am+cyl, mtcars)
 model3 <- lm(mpg~wt+am+disp, mtcars)
 model4 <- lm(mpg~wt+am+hp, mtcars)
@@ -94,27 +98,33 @@ fit3 <- update(fit, mpg~wt+hp+am)
 fit4 <- update(fit, mpg~wt+hp+am+wt*am)
 fit5 <- update(fit, mpg~wt+hp+am+wt*am+hp*am)
 anova(fit,fit2,fit3,fit4,fit5)
-```
 
+```
 Once we satisfy the required inclusion of transmission type, we see that the addition of the interaction term (wt*am) is necessary. 
 
-In the Appendix we plot residuals vs hat-values for the model **mpg~wt+hp+am+wt\*am** and identify the Maserati Bora as a high influence point. This is a high-performance vehicle and is the only vehicle in the data set with 8 carburetors. Furthermore, the dfbeta of this point for the coefficient of transmission type, -2.2929, lends additional motivation to choose to remove it.
+In the Appendix we plot residuals vs hat-values for the model **mpg~wt+hp+am+wt\*am** and identify the Maserati Bora as a high influence point. This is a high-performance vehicle and is the only vehicle in the data set with 8 carburetors. Furthermore, the dfbeta of this point for the coefficient of transmission type, -2.2929, lends motivation to our choice to remove it.
 
-Finally, we summarize the model and check the 95% confidence interval for the coefficients.
+Now we note that the response for mpg vs horsepower (see Appendix) looks a bit quadratic but the removal of the Maserati data point has lessens this effect.
 
-
+The residuals vs Fit and Q-Q plots shown in the Appendix indicate that the residuals are close to normally-distributed, which is further supported by the R-squared value of the model.
+ 
 ```{r, echo=F, message=F}
-mtcars2 <- mtcars[-31]
-final.model <- lm(mpg~wt+hp+am+wt*am, mtcars2)
-summary(final.model)
-confint(final.model)
+mtcars2 <- mtcars[-31,]
+candidate.model <- lm(mpg~wt+hp+am+wt*am, mtcars2)
+
+hp.squared <- lm(mpg~wt+hp+am+wt*am+I(hp*hp), mtcars2)
+summary(candidate.model)
+confint(candidate.model)
+# summary(hp.squared)
 ```
 
 
 ###Conclusion
-We have shown that a linear model using weight, horsepower, transmission type and an interaction term between weight and transmission fits the observation in the data set well, with an R-squared value of 0.85, indicating 85% of the total variance in mpg has been explained. The 95% confidence intervals for the coefficients show no instances where the interval crosses zero. 
+We have shown that a linear model using weight, horsepower, transmission type, and an interaction term between weight and transmission fits observations in the data set well, with an R-squared value of 0.868, indicating 86.8% of the total variance in mpg has been explained. The 95% confidence intervals for the coefficients show no instances where the intervals cross zero and the residuals plots show no discernible patterns. The Q-Q plot supports the assertion that the residual
 
-We can report that the mean increase in miles per gallon associated with a manual transmission is shown to be 11.55 mpg, with a P-value of 0.00784.
+Clearly fuel efficiency is adversely impacted by weight, as shown by the negative slope in the linear model. Likewise, increases in horsepower, which we take to be a proxy for other engine size variables such as displacement and numbers of cylinders, also reduce fuel efficiency.
+
+We can report that the mean increase in miles per gallon associated with a manual transmission, as calculated from the values of the transmission type coefficient and its interaction term with weight,is shown to be 9.23 mpg, with a maximum P-value of 0.00378 as given by the interaction term.
 
 ##Appendix
 
@@ -141,18 +151,6 @@ plot(mtcars$am, mtcars$mpg, col="steelblue", xaxt = "n", main="MPG vs Transmissi
 axis(1, at=1:2, labels=c("Automatic", "Manual"))
 ```
 
-
-###Visualizing Relationships Between Transmission and Factor Variables
-
-
-```{r, echo=F, fig.align="center", fig.height=6, fig.width=6}
-par(mfrow=c(2,2))
-plot(mtcars$am, mtcars$cyl, xlab = "am", ylab = "cyl")
-plot(mtcars$am, mtcars$vs, xlab = "am", ylab = "vs")
-plot(mtcars$am, mtcars$gear, xlab = "am", ylab = "gear")
-plot(mtcars$am, mtcars$carb, xlab = "am", ylab = "carb")
-```
-
 ##Interactions for Weight and Transmission and for Horsepower and Transmission
 ```{r, echo=F, message=F}
 library(lattice)
@@ -176,4 +174,23 @@ plot(hatvalues(fit4), fit4$residuals, pch=19, col="firebrick", main = "HatValues
 text( hatvalues(fit4), fit4$residuals, rownames( mtcars ), pos= 3, col="steelblue")
 ```
 
+##Quadratic Response of MPG with Horsepower
+```{r, echo=F, message=F}
+library(ggplot2)
+g <- ggplot(mtcars2, aes(hp, mpg, color=1))
+g <- g+geom_point()
+g <- g + geom_smooth()
+g
+```
+
+##Comparing models with and without Horsepwer Squared Term
+```{r, echo=F, message=F, fig.height=8}
+par(mfrow=c(2,2))
+plot(candidate.model)
+```
+
+```{r, echo=F, message=F, fig.height=8}
+par(mfrow=c(2,2))
+plot(hp.squared)
+```
 </div>
