@@ -7,7 +7,7 @@ output: pdf_document
 
 ##Executive Summary
 
-MotorTrend magazine data from observations of 32 models of cars were analyzed to help understand the characteristics that account for fuel efficiency. Of particular interest is whether there is an effect associated with automatic versus manual transmission. After we account for the effect of a strong relationship between vehicle weight and transmission type, we can say that there is a statistically significant increase in gas mileage associated with manual transmissions, which we report as a mean increase of **9.23 mpg**, with a maximum **P-value of 0.00378**.
+MotorTrend magazine data from observations of 32 models of cars were analyzed to help understand the characteristics that account for fuel efficiency. Of particular interest is whether there is an effect associated with automatic versus manual transmission. After we account for a strong relationship between vehicle weight and transmission type, we claim there is a statistically significant increase in the mean value of gas mileage attributable to manual transmissions, which we report as **9.23 mpg**, with a **P-value $\leq$ 0.00378**.
 
 ###Data Processing and Initial Exploratory Analyses
 This report omits some code for brevity. The entire R markdown file can be found [here](https://github.com/amaglamatedclyde/mtcars).
@@ -36,7 +36,7 @@ mtcars$vs <- as.factor(mtcars$vs)
 mtcars$carb <- as.factor(mtcars$carb)
 ```
 
-Also in the Appendix we present a box and whisker plot of the two transmission types demonstrating that the median mpg of the automatic group lies below that of the manual group. We use hypothesis testing to determine if the difference in the means is statistically significant. 
+Also in the Appendix we present a box and whisker plot of the two transmission types demonstrating that the median mpg of the automatic group lies below that of the manual group.
 
 ```{r, include=F}
 
@@ -49,23 +49,27 @@ t.test(am1$mpg, am0$mpg)
 diff.means <- round(mean(am1$mpg)-mean(am0$mpg), 2)
 ```
 
-We report a p-value for a t-test with unequal variances as 0.001374 and therefor reject the null hypothesis at the 95% confidence level, to conclude that the difference between the means, `r diff.means` mpg, is significant. 
+We report a p-value for a t-test with unequal variances as 0.001374 and therefor reject the null hypothesis at the 95% confidence level, to conclude that the difference between the means of the mileage for the two transmission types, `r diff.means` mpg, is significant. 
+
+This is an important first clue, but, as we will show, it does not present a complete picture.
 
 ###Developing a Multivariate Linear Model
-Next we turn to multivariate regression to develop a model that will help us understand whether confounding variables are contributing **[omitted variable bias](https://en.wikipedia.org/wiki/Omitted-variable_bias)**. We tabulate the correlation of the numeric variables, as many of them measure closely-related properties. 
+Next we turn to multivariate regression to develop a model that will help us understand whether confounding variables are contributing **[omitted variable bias](https://en.wikipedia.org/wiki/Omitted-variable_bias)**. We tabulate the correlation of the numeric variables. Many of these measure closely-related properties, as these values clearly indicate. 
 
 <div align="center">**Correlation Table of mtcars Data**</div>
 ```{r, echo=FALSE, fig.align="top", fig.height=2}
 kable(cor(mtcars[sapply(mtcars, class)=="numeric"]))
 ```
 
-We now consider the apriori exclusion of certain variables. First, the quarter second mile time is influenced by driver skill and is heavily biased in favor of manual transmission, but adds little meaning to ordinary driving conditions, so we choose not to include it. 
 
-We also know that 'drat,' the rear axle ratio, is a downstream variable determined by the upstream drive train, including the transmission, so we choose not to include it when analyzing fuel efficiency.
+###Feature Selection
+We first consider the apriori exclusion of certain variables. For example, the quarter second mile time is influenced by driver skill and is heavily biased in favor of manual transmission. This is not meaningful to our goal of quantifying transmission effects under normal driving conditions, so we choose to exclude it. 
 
-From the correlation table we select weight as our first predictor, since it is the variable most highly correlated with mpg. 
+We also know that 'drat,' the rear axle ratio, is a downstream variable determined by the upstream drive train, including the transmission, so the effect of this variable is captured by other features.
 
-Looking at the data sorted by weight below, we see that 9 of the top 10 heaviest cars have automatic transmissions, while 9 of lightest 10 have manual. This leads us to the addition of an interaction term between weight and transmission type to the model. In the Appendix we show a visualization of this relationship.
+We select weight as our first predictor since it shows the highest correlation with mpg. 
+
+When we examine the data sorted by weight, we see that 9 of the top 10 heaviest cars have automatic transmissions, while 9 of lightest 10 have manual. This leads us to consider the addition to our model of an interaction term between weight and transmission type. In the Appendix we show a visualization of this relationship, where the two transmission types exhibit a distinct separation in a plot of weight vs MPG. 
 
 <div align="center">**Sorting the Data by Vehicle Weight**</div>
 ```{r Sorting By Weight, echo=F}
@@ -73,7 +77,7 @@ kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, hp, m
 kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, hp, mpg) %>% arrange(-wt) %>% tail(10))
 ```
 
-We systematically examine the inclusion of other variables while seeking to maintain significant P-values for their coefficients and maximize the fit as measured by R-squared. We choose to include horsepower, which will therefor serve as a proxy for the remaining collinear engine performance variables and refer the reader to the full R markdown file for the code.
+We systematically examine the inclusion of other variables and choose to include horsepower, which will therefor serve as a proxy for the remaining collinear engine performance variables. The reader is referred to the full R markdown file for the code demonstrating this search procedure.
 
 ```{r, echo=F, message=F, include=F}
 model2 <- lm(mpg~wt+am+cyl, mtcars)
@@ -89,7 +93,7 @@ lapply(list(model4, model5), function(m) summary(m)$coef)
 
 ####Diagnostics
 
-Now we use ANOVA testing of nested models to choose which terms to include in our selection.
+ANOVA testing of nested models is employed to choose which terms are significant in the presence of others.
 
 ```{r, echo=F, message=F}
 fit <- lm(mpg~wt, mtcars)
@@ -100,14 +104,14 @@ fit5 <- update(fit, mpg~wt+hp+am+wt*am+hp*am)
 anova(fit,fit2,fit3,fit4,fit5)
 
 ```
-Once we satisfy the required inclusion of transmission type, we see that the addition of the interaction term (wt*am) is necessary. 
+Once we satisfy the required inclusion of transmission type, we see that the addition of the interaction term (wt*am) is also needed. 
 
+###High Influence Points
 In the Appendix we plot residuals vs hat-values for the model **mpg~wt+hp+am+wt\*am** and identify the Maserati Bora as a high influence point. This is a high-performance vehicle and is the only vehicle in the data set with 8 carburetors. Furthermore, the dfbeta of this point for the coefficient of transmission type, -2.2929, lends motivation to our choice to remove it.
 
-Now we note that the response for mpg vs horsepower (see Appendix) looks a bit quadratic but the removal of the Maserati data point has lessens this effect.
+We note that the response for mpg vs horsepower (see Appendix) appears less quadratic after the removal of the Maserati data point.
 
-The residuals vs Fit and Q-Q plots shown in the Appendix indicate that the residuals are close to normally-distributed, which is further supported by the R-squared value of the model.
- 
+The residuals vs Fitted and Q-Q plots shown in the Appendix indicate the distribution of the residuals is close to normal. 
 ```{r, echo=F, message=F}
 mtcars2 <- mtcars[-31,]
 candidate.model <- lm(mpg~wt+hp+am+wt*am, mtcars2)
@@ -118,13 +122,12 @@ confint(candidate.model)
 # summary(hp.squared)
 ```
 
-
 ###Conclusion
-We have shown that a linear model using weight, horsepower, transmission type, and an interaction term between weight and transmission fits observations in the data set well, with an R-squared value of 0.868, indicating 86.8% of the total variance in mpg has been explained. The 95% confidence intervals for the coefficients show no instances where the intervals cross zero and the residuals plots show no discernible patterns. The Q-Q plot supports the assertion that the residual
+We have shown that a linear model using weight, horsepower, transmission type, and an interaction term between weight and transmission fits observations in the data set well, with an R-squared value of 0.868, indicating 86.8% of the total variance in mpg has been explained. The 95% confidence intervals for the coefficients show no instances where the intervals cross zero and the residuals plots show no discernible patterns. 
 
-Clearly fuel efficiency is adversely impacted by weight, as shown by the negative slope in the linear model. Likewise, increases in horsepower, which we take to be a proxy for other engine size variables such as displacement and numbers of cylinders, also reduce fuel efficiency.
+Clearly, fuel efficiency is adversely impacted by vehicle weight, as shown by the negative slope in the linear model. Likewise, increased horsepower, which we also take to be a proxy for other engine size variables, such as displacement and numbers of cylinders and carburetors, also reduces fuel efficiency.
 
-We can report that the mean increase in miles per gallon associated with a manual transmission, as calculated from the values of the transmission type coefficient and its interaction term with weight,is shown to be 9.23 mpg, with a maximum P-value of 0.00378 as given by the interaction term.
+We can report that the increase in mean miles per gallon associated with a manual transmission, as calculated from the values of the transmission type slope coefficient and that of its interaction term with weight, is shown to be **`r round( 13.84775-4.61832, 2)` mpg**, with a maximum **P-value of 0.00378** as given by the interaction term.
 
 ##Appendix
 
@@ -174,7 +177,7 @@ plot(hatvalues(fit4), fit4$residuals, pch=19, col="firebrick", main = "HatValues
 text( hatvalues(fit4), fit4$residuals, rownames( mtcars ), pos= 3, col="steelblue")
 ```
 
-##Quadratic Response of MPG with Horsepower
+##Quadratic Response of MPG with Horsepower 
 ```{r, echo=F, message=F}
 library(ggplot2)
 g <- ggplot(mtcars2, aes(hp, mpg, color=1))
