@@ -7,7 +7,7 @@ output: pdf_document
 
 ##Executive Summary
 
-MotorTrend magazine data from observations of 32 models of cars were analyzed to help understand the characteristics that account for fuel efficiency. Of particular interest is whether there is an effect associated with automatic versus manual transmission. After we account for a strong relationship between vehicle weight and transmission type, we claim there is a statistically significant increase in the mean value of gas mileage attributable to manual transmissions, which we report as **9.23 mpg**, with a **P-value $\leq$ 0.00378**.
+MotorTrend magazine data from observations of 32 models of cars were analyzed to help understand the characteristics that account for fuel efficiency. Of particular interest is whether there is an effect associated with automatic versus manual transmission. After we account for a strong relationship between vehicle weight and transmission type, we claim there is a statistically significant increase in the mean value of gas mileage attributable to manual transmissions, which we report as **8.03 mpg**, with a **P-value $\leq$ 0.03594**.
 
 ###Data Processing and Initial Exploratory Analyses
 This report omits some code for brevity. The entire R markdown file can be found [here](https://github.com/amaglamatedclyde/mtcars).
@@ -77,7 +77,7 @@ kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, hp, m
 kable(mtcars %>% add_rownames(var="rownames") %>% select(rownames, wt, am, hp, mpg) %>% arrange(-wt) %>% tail(10))
 ```
 
-We systematically examine the inclusion of other variables and choose to include horsepower, which will therefor serve as a proxy for the remaining collinear engine performance variables. The reader is referred to the full R markdown file for the code demonstrating this search procedure.
+The effect of other variables on the model was examined systematically and led us to choose to include horsepower. 
 
 ```{r, echo=F, message=F, include=F}
 model2 <- lm(mpg~wt+am+cyl, mtcars)
@@ -93,9 +93,9 @@ lapply(list(model4, model5), function(m) summary(m)$coef)
 
 ####Diagnostics
 
-ANOVA testing of nested models is employed to choose which terms are significant in the presence of others.
+ANOVA testing of nested models was employed to choose which terms are significant in the presence of others. 
 
-```{r, echo=F, message=F}
+```{r, echo=F, message=F, include=F}
 fit <- lm(mpg~wt, mtcars)
 fit2 <- update(fit, mpg~wt+hp)
 fit3 <- update(fit, mpg~wt+hp+am)
@@ -104,12 +104,12 @@ fit5 <- update(fit, mpg~wt+hp+am+wt*am+hp*am)
 anova(fit,fit2,fit3,fit4,fit5)
 
 ```
-Once we satisfy the required inclusion of transmission type, we see that the addition of the interaction term (wt*am) is also needed. 
+Once we satisfy the required inclusion of transmission type, it was seen that the addition of the interaction term (wt*am) was also needed. 
+
+The reader is again referred to the full R markdown file for the code demonstrating the model search procedure and the ANOVA table.
 
 ###High Influence Points
 In the Appendix we plot residuals vs hat-values for the model **mpg~wt+hp+am+wt\*am** and identify the Maserati Bora as a high influence point. This is a high-performance vehicle and is the only vehicle in the data set with 8 carburetors. Furthermore, the dfbeta of this point for the coefficient of transmission type, -2.2929, lends motivation to our choice to remove it.
-
-We note that the response for mpg vs horsepower (see Appendix) appears less quadratic after the removal of the Maserati data point.
 
 The residuals vs Fitted and Q-Q plots shown in the Appendix indicate the distribution of the residuals is close to normal. 
 ```{r, echo=F, message=F}
@@ -118,16 +118,35 @@ candidate.model <- lm(mpg~wt+hp+am+wt*am, mtcars2)
 
 hp.squared <- lm(mpg~wt+hp+am+wt*am+I(hp*hp), mtcars2)
 summary(candidate.model)
-confint(candidate.model)
+# confint(candidate.model)
 # summary(hp.squared)
 ```
 
 ###Conclusion
 We have shown that a linear model using weight, horsepower, transmission type, and an interaction term between weight and transmission fits observations in the data set well, with an R-squared value of 0.868, indicating 86.8% of the total variance in mpg has been explained. The 95% confidence intervals for the coefficients show no instances where the intervals cross zero and the residuals plots show no discernible patterns. 
 
-Clearly, fuel efficiency is adversely impacted by vehicle weight, as shown by the negative slope in the linear model. Likewise, increased horsepower, which we also take to be a proxy for other engine size variables, such as displacement and numbers of cylinders and carburetors, also reduces fuel efficiency.
+To quantify the impact of transmission type on gas mileage using what we've learned from this model, we subset the data by transmission type and examine a linear model with weight and horsepower as predictors for each group separately. Horsepower is no longer a significant predictor for the manual transmission group. We calculate the mean mpg for each model evaluated at mean weight and horsepower. We report a p-value based on the highest value of the p-values for all terms in the calculation. The code is shown in the R markdown file previously cited.
 
-We can report that the increase in mean miles per gallon associated with a manual transmission, as calculated from the values of the transmission type slope coefficient and that of its interaction term with weight, is shown to be **`r round( 13.84775-4.61832, 2)` mpg**, with a maximum **P-value of 0.00378** as given by the interaction term.
+```{r, echo=F, include=F}
+am1 <- subset(mtcars2, am==1)
+am0 <- subset(mtcars2, am==0)
+automatic <- lm(mpg~wt+hp, am0)
+manual <- lm(mpg~wt, am1)
+mean.data.am0 <- data.frame(mean(am0$wt), mean(am0$hp))
+names(mean.data.am0) <- c("wt", "hp")
+mean.data.am1 <- data.frame(mean(am1$wt))
+names(mean.data.am1) <- c("wt")
+am0.bar <- predict.lm(automatic, mean.data.am0)
+am1.bar <- predict.lm(manual, mean.data.am1)
+confint(automatic)
+confint(manual)
+```
+
+```{r}
+summary(automatic)
+summary(manual)
+```
+Accounting for weight and horsepower, we now report a value of **`r round(am1.bar-am0.bar, 2)`mpg** for the increase in the mean mpg value for manual transmission.
 
 ##Appendix
 
@@ -147,6 +166,11 @@ gear|Number of forward gears
 carb|Number of carburetors
 
 <div align="center">
+##Pairs Plot for mtcars
+```{r, echo=F, fig.height=8, fig.width=8}
+pairs(mtcars, col = "firebrick")
+```
+
 ##Box and Whisker plot of MPG vs Transmission Type
 
 ```{r, echo=F, fig.width=6,fig.height=6, fig.align='center'}
@@ -177,16 +201,7 @@ plot(hatvalues(fit4), fit4$residuals, pch=19, col="firebrick", main = "HatValues
 text( hatvalues(fit4), fit4$residuals, rownames( mtcars ), pos= 3, col="steelblue")
 ```
 
-##Quadratic Response of MPG with Horsepower 
-```{r, echo=F, message=F}
-library(ggplot2)
-g <- ggplot(mtcars2, aes(hp, mpg, color=1))
-g <- g+geom_point()
-g <- g + geom_smooth()
-g
-```
-
-##Comparing models with and without Horsepwer Squared Term
+##Comparing models with and without Horsepower Squared Term
 ```{r, echo=F, message=F, fig.height=8}
 par(mfrow=c(2,2))
 plot(candidate.model)
